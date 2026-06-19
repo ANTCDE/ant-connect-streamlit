@@ -1,0 +1,17 @@
+{
+  "name": "ant-connect-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@antcde/connect-ts": "workspace:*",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vite": "^6.0.0"
+  }
+}
