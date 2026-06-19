@@ -10,5 +10,6 @@ def render_bridge(
     key: str = "ant_connect_bridge",
     signals: list | None = None,
     requests: list | None = None,
+    ack_signals: int = 0,
 ) -> dict | None:
-    return _component(key=key, default=None, signals=signals or [], requests=requests or [])
+    return _component(key=key, default=None, signals=signals or [], requests=requests or [], ack_signals=ack_signals)

@@ -94,6 +94,9 @@ class AntConnect:
         self._responses: dict[str, Any] = {}
         self._pending: set[str] = set()
         self._req_id_map: dict[str, str] = {}
+        self._received_signals: list[dict] = []
+        self._signals_to_ack: int = 0
+        self._subscriptions: dict[str, dict] = {}
 
     @property
     def context(self) -> Context | None:
@@ -244,11 +247,63 @@ class AntConnect:
         if rerun:
             st.rerun()
 
+    def events(self, kind: str | None = None) -> list[dict]:
+        """Return and drain accumulated signal events from the host.
+
+        Pass a signal key (e.g. ``"task"``, ``"topic"``, ``"limitChange"``)
+        to filter, or ``None`` for all events.
+        """
+        if kind is None:
+            result = self._received_signals[:]
+            self._received_signals.clear()
+            return result
+        matched = [s for s in self._received_signals if kind in s]
+        self._received_signals = [s for s in self._received_signals if kind not in s]
+        return matched
+
+    def observe(self, entity_type: str, entity_id: str | None = None,
+                actions: list[str] | None = None) -> str:
+        """Start observing entity changes via Echo. Returns key for ``unobserve()``."""
+        random = str(uuid4())
+        sub_key = f"observe:{random}"
+        self._subscriptions[sub_key] = {"type": "observe", "random": random}
+        payload: dict[str, Any] = {"observe": {"random": random, "type": entity_type}}
+        if entity_id is not None:
+            payload["observe"]["id"] = entity_id
+        if actions is not None:
+            payload["observe"]["actions"] = actions
+        self.send_signal(payload, rerun=False)
+        return sub_key
+
+    def unobserve(self, sub_key: str) -> None:
+        """Stop observing an entity previously registered with ``observe()``."""
+        sub = self._subscriptions.pop(sub_key, None)
+        if sub and sub["type"] == "observe":
+            self.send_signal({"unobserve": {"random": sub["random"]}}, rerun=False)
+
+    def subscribe_channel(self, channel: str, events: list[str]) -> str:
+        """Subscribe to an Echo channel. Events arrive via ``events()``."""
+        sub_key = f"channel:{channel}"
+        self._subscriptions[sub_key] = {"type": "channel", "channel": channel}
+        self.send_signal({"subscribeChannel": {"channel": channel, "events": events}}, rerun=False)
+        return sub_key
+
+    def unsubscribe_channel(self, channel: str) -> None:
+        """Unsubscribe from an Echo channel."""
+        self._subscriptions.pop(f"channel:{channel}", None)
+        self.send_signal({"unsubscribeChannel": {"channel": channel}}, rerun=False)
+
+    def publish_topic(self, name: str, data: Any = None, scope: str = "project") -> None:
+        """Publish a message to a topic. Other apps receive via ``events("topic")``."""
+        self.send_signal({"topic": {"name": name, "data": data, "scope": scope}}, rerun=False)
+
     def _sync(self) -> None:
         self._prev_context = self._context
         signals = self._signals[:]
         self._signals.clear()
-        raw = render_bridge(signals=signals, requests=self._requests)
+        ack = self._signals_to_ack
+        self._signals_to_ack = 0
+        raw = render_bridge(signals=signals, requests=self._requests, ack_signals=ack)
 
         if raw and isinstance(raw, dict):
             msg_type = raw.get("type")
@@ -264,6 +319,11 @@ class AntConnect:
                     )
                     self._pending.discard(cache_key)
                     self._requests.clear()
+
+            incoming = raw.get("signals", [])
+            if incoming:
+                self._received_signals.extend(incoming)
+                self._signals_to_ack = len(incoming)
 
 
 def connect() -> AntConnect:

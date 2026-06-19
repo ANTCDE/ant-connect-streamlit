@@ -67,6 +67,8 @@ let client: Client | null = null
 const sentSignals = new Set<string>()
 let pendingSignals: Array<{ nonce: string, payload: Record<string, unknown> }> = []
 const state = { titleCount: 0 }
+const signalBuffer: unknown[] = []
+let latestContext: unknown = null
 
 function flushSignals() {
   if (!client || !pendingSignals.length)
@@ -136,8 +138,8 @@ function handleServiceRequests(requests?: ServiceRequest[]) {
       ? client.request({ url: req.url!, method: req.method, data: req.data, params: req.params, headers: req.headers })
       : client.connect[req.service][req.method](...req.args)
     promise
-      .then((data: unknown) => stSetValue({ type: 'response', id: req.id, data }))
-      .catch((err: unknown) => stSetValue({ type: 'response', id: req.id, error: err instanceof Error ? err.message : String(err) }))
+      .then((data: unknown) => stSetValue({ type: 'response', id: req.id, data, signals: [...signalBuffer] }))
+      .catch((err: unknown) => stSetValue({ type: 'response', id: req.id, error: err instanceof Error ? err.message : String(err), signals: [...signalBuffer] }))
   }
 }
 
@@ -192,7 +194,17 @@ function connect() {
     .pipe(
       distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
     )
-    .subscribe(data => stSetValue({ type: 'context', data }))
+    .subscribe((data) => {
+      latestContext = data
+      stSetValue({ type: 'context', data, signals: [...signalBuffer] })
+    })
+
+  client.signal.receive((signal: Signal) => {
+    signalBuffer.push(signal)
+    if (signalBuffer.length > 500)
+      signalBuffer.splice(0, signalBuffer.length - 500)
+    stSetValue({ type: 'context', data: latestContext, signals: [...signalBuffer] })
+  })
 }
 
 // --- Bootstrap ---
@@ -200,6 +212,9 @@ function connect() {
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'streamlit:render') {
     connect()
+    const ackCount = event.data.args?.ack_signals ?? 0
+    if (ackCount > 0)
+      signalBuffer.splice(0, ackCount)
     handleSignals(event.data.args?.signals)
     handleServiceRequests(event.data.args?.requests)
   }
