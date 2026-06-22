@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from enum import Enum, StrEnum
-from typing import Any, Literal
+from typing import Any, Dict, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 
@@ -257,6 +257,9 @@ class LabelTargetType(StrEnum):
 
 
 class LicensePermissionMap(BaseModel):
+    model_config = ConfigDict(
+        extra='allow',
+    )
     apps_configure: bool | None = Field(None, alias='apps.configure')
     projects_create: bool | None = Field(None, alias='projects.create')
     projects_delete: bool | None = Field(None, alias='projects.delete')
@@ -266,6 +269,10 @@ class LicensePermissionMap(BaseModel):
     triggers_configure: bool | None = Field(None, alias='triggers.configure')
     triggers_read: bool | None = Field(None, alias='triggers.read')
     users_configure: bool | None = Field(None, alias='users.configure')
+
+
+LicensePermissionMap.__annotations__['__pydantic_extra__'] = Dict[str, bool]
+LicensePermissionMap.model_rebuild(force=True)
 
 
 class LimitResourceType(StrEnum):
@@ -327,6 +334,9 @@ class Notification(BaseModel):
 
 
 class ProjectPermissionMap(BaseModel):
+    model_config = ConfigDict(
+        extra='allow',
+    )
     apps_configure: bool | None = Field(None, alias='apps.configure')
     rbac_configure: bool | None = Field(None, alias='rbac.configure')
     sbs_configure: bool | None = Field(None, alias='sbs.configure')
@@ -337,6 +347,10 @@ class ProjectPermissionMap(BaseModel):
     triggers_read: bool | None = Field(None, alias='triggers.read')
     users_configure: bool | None = Field(None, alias='users.configure')
     users_read: bool | None = Field(None, alias='users.read')
+
+
+ProjectPermissionMap.__annotations__['__pydantic_extra__'] = Dict[str, bool]
+ProjectPermissionMap.model_rebuild(force=True)
 
 
 class PropagationRunStatus(StrEnum):
@@ -715,6 +729,7 @@ class TaskApp(BaseModel):
     color: str | None = None
     icon: str | None = None
     id: str | None = None
+    state: dict[str, str] | None = None
     title: str | None = None
 
 
@@ -969,7 +984,7 @@ class Cause(BaseModel):
         extra='ignore', populate_by_name=True,
     )
     action: Change | None = None
-    data: dict[str, Any] | None = None
+    data: dict[str, Any] | None = Field(None, max_length=0)
     id: str | None = None
     meta: Meta | None = None
 
@@ -1634,6 +1649,11 @@ class Context(BaseModel):
         extra='ignore', populate_by_name=True,
     )
     dark_mode: bool | None = Field(None, alias='darkMode')
+    initial_route_query: dict[str, str] | None = Field(
+        None,
+        alias='initialRouteQuery',
+        description='Initial URL query parameters at the time the app loaded — used for deep-link restoration.',
+    )
     license: License | None = None
     notepad_task: Task | None = Field(None, alias='notepadTask')
     project: ProjectShort | None = None
@@ -1641,6 +1661,11 @@ class Context(BaseModel):
     selected_labels: LabelFilterState | None = Field(None, alias='selectedLabels')
     selected_task: Task | None = Field(None, alias='selectedTask')
     task: Task | None = None
+    tour_mode: bool | None = Field(
+        None,
+        alias='tourMode',
+        description='True while the OS exploration tour is active. Apps use this to show TourZone overlays.',
+    )
     user: User | None = None
 
 
